@@ -21,8 +21,15 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -47,6 +54,9 @@ class MainActivity : ComponentActivity() {
 fun PhoneCompanionScreen() {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val scrollState = rememberScrollState()
+
+    var pcIp by remember { mutableStateOf(KdeConnectManager.getSavedPcIp(context)) }
 
     Scaffold(
         topBar = {
@@ -59,6 +69,7 @@ fun PhoneCompanionScreen() {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .verticalScroll(scrollState)
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Top
@@ -77,9 +88,47 @@ fun PhoneCompanionScreen() {
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = "This companion app runs in the background to receive Lock/Unlock commands from your Pixel Watch and forward them to the official KDE Connect app.",
+                        text = "This companion app runs in the background to receive Lock/Unlock commands from your Pixel Watch and forward them to KDE Connect.",
                         fontSize = 14.sp
                     )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Desktop PC IP Address",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Enter your PC's local IP address (e.g. 192.168.1.50) for direct socket lock/unlock reliability.",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = pcIp,
+                        onValueChange = { pcIp = it },
+                        label = { Text("PC IP Address") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(
+                        onClick = {
+                            KdeConnectManager.savePcIp(context, pcIp)
+                            Toast.makeText(context, "PC IP Saved!", Toast.LENGTH_SHORT).show()
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Save PC IP")
+                    }
                 }
             }
 

@@ -1,22 +1,31 @@
 package com.example.kdelockunlock.presentation
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.rotary.onRotaryScrollEvent
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
@@ -31,71 +40,106 @@ import androidx.wear.compose.material3.ListHeader
 import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.OutlinedButton
 import androidx.wear.compose.material3.ScreenScaffold
+import androidx.wear.compose.material3.ScrollIndicator
 import androidx.wear.compose.material3.SurfaceTransformation
 import androidx.wear.compose.material3.Text
 import androidx.wear.compose.material3.lazy.rememberTransformationSpec
 import androidx.wear.compose.material3.lazy.transformedHeight
 import androidx.wear.compose.ui.tooling.preview.WearPreviewDevices
-import com.example.kdelockunlock.data.WatchWearableClient
+import com.example.kdelockunlock.data.WatchBluetoothClient
 import com.example.kdelockunlock.presentation.theme.KdeLockUnlockTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        val command = intent?.getStringExtra("command")
         setContent {
-            KdeLockUnlockApp()
+            KdeLockUnlockApp(initialCommand = command)
         }
     }
 }
 
 @Composable
-fun KdeLockUnlockApp() {
+fun KdeLockUnlockApp(initialCommand: String? = null) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
-    val client = remember { WatchWearableClient(context) }
+    val btClient = remember { WatchBluetoothClient(context) }
+    val coroutineScope = rememberCoroutineScope()
 
-    DisposableEffect(Unit) {
-        client.registerListener()
-        onDispose {
-            client.unregisterListener()
+    val statusText by btClient.statusText.collectAsState()
+    val isConnected by btClient.isConnected.collectAsState()
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { _ -> }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+        }
+        if (initialCommand == "LOCK") {
+            btClient.sendLockCommand()
+        } else if (initialCommand == "UNLOCK") {
+            btClient.sendUnlockCommand()
         }
     }
-
-    val statusText by client.statusText.collectAsState()
-    val isConnected by client.isConnected.collectAsState()
 
     KdeLockUnlockTheme {
         AppScaffold {
             val listState = rememberTransformingLazyColumnState()
             val transformationSpec = rememberTransformationSpec()
+            val focusRequester = remember { FocusRequester() }
+
+            DisposableEffect(Unit) {
+                focusRequester.requestFocus()
+                onDispose { }
+            }
 
             ScreenScaffold(
-                scrollState = listState
+                scrollState = listState,
+                scrollIndicator = {
+                    ScrollIndicator(state = listState)
+                }
             ) { contentPadding ->
                 TransformingLazyColumn(
                     contentPadding = contentPadding,
                     state = listState,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier
+                        .focusRequester(focusRequester)
+                        .focusable()
+                        .onRotaryScrollEvent { event ->
+                            coroutineScope.launch {
+                                listState.scrollBy(event.verticalScrollPixels)
+                            }
+                            true
+                        }
                 ) {
                     item {
                         ListHeader(
                             modifier = Modifier
-                                .fillMaxWidth()
+                                .fillMaxWidth(0.92f)
                                 .transformedHeight(this, transformationSpec),
                             transformation = SurfaceTransformation(transformationSpec)
                         ) {
                             Text(
-                                text = "KDE PC Control",
-                                style = MaterialTheme.typography.titleMedium
+                                text = "BT PC Control",
+                                style = MaterialTheme.typography.titleSmall
                             )
                         }
                     }
 
                     item {
                         Card(
-                            onClick = { client.sendPing() },
+                            onClick = {
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                    permissionLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
+                                }
+                            },
                             modifier = Modifier
-                                .fillMaxWidth()
+                                .fillMaxWidth(0.92f)
                                 .transformedHeight(this, transformationSpec),
                             transformation = SurfaceTransformation(transformationSpec),
                             colors = CardDefaults.cardColors(
@@ -107,12 +151,12 @@ fun KdeLockUnlockApp() {
                             )
                         ) {
                             Column(
-                                modifier = Modifier.padding(8.dp),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally
                             ) {
                                 Text(
                                     text = statusText,
-                                    style = MaterialTheme.typography.bodyMedium
+                                    style = MaterialTheme.typography.bodySmall
                                 )
                             }
                         }
@@ -122,10 +166,12 @@ fun KdeLockUnlockApp() {
                         Button(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                client.sendLockCommand()
+                                coroutineScope.launch {
+                                    btClient.sendLockCommand()
+                                }
                             },
                             modifier = Modifier
-                                .fillMaxWidth()
+                                .fillMaxWidth(0.92f)
                                 .transformedHeight(this, transformationSpec),
                             transformation = SurfaceTransformation(transformationSpec),
                             colors = ButtonDefaults.buttonColors(
@@ -133,7 +179,7 @@ fun KdeLockUnlockApp() {
                                 contentColor = MaterialTheme.colorScheme.onError
                             )
                         ) {
-                            Text("🔒 Lock Desktop PC")
+                            Text("🔒 Lock PC", style = MaterialTheme.typography.labelLarge)
                         }
                     }
 
@@ -141,10 +187,12 @@ fun KdeLockUnlockApp() {
                         Button(
                             onClick = {
                                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                client.sendUnlockCommand()
+                                coroutineScope.launch {
+                                    btClient.sendUnlockCommand()
+                                }
                             },
                             modifier = Modifier
-                                .fillMaxWidth()
+                                .fillMaxWidth(0.92f)
                                 .transformedHeight(this, transformationSpec),
                             transformation = SurfaceTransformation(transformationSpec),
                             colors = ButtonDefaults.buttonColors(
@@ -152,21 +200,19 @@ fun KdeLockUnlockApp() {
                                 contentColor = MaterialTheme.colorScheme.onPrimary
                             )
                         ) {
-                            Text("🔓 Unlock Desktop PC")
+                            Text("🔓 Unlock PC", style = MaterialTheme.typography.labelLarge)
                         }
                     }
 
                     item {
                         OutlinedButton(
-                            onClick = {
-                                client.checkConnection()
-                            },
+                            onClick = {},
                             modifier = Modifier
-                                .fillMaxWidth()
+                                .fillMaxWidth(0.92f)
                                 .transformedHeight(this, transformationSpec),
                             transformation = SurfaceTransformation(transformationSpec)
                         ) {
-                            Text("Refresh Status")
+                            Text("BT Connected", style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }

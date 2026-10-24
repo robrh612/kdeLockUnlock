@@ -16,18 +16,20 @@ class MainComplicationService : SuspendingComplicationDataSourceService() {
         if (type != ComplicationType.SHORT_TEXT) {
             return null
         }
-        return createComplicationData("Lock", "Lock Desktop PC")
+        return createComplicationData("🔒 Lock", "Lock Desktop PC")
     }
 
     override suspend fun onComplicationRequest(request: ComplicationRequest): ComplicationData {
-        return createComplicationData("Lock PC", "Lock Desktop PC")
+        return createComplicationData("🔒 Lock", "Lock Desktop PC")
     }
 
     private fun createComplicationData(text: String, contentDescription: String): ComplicationData {
-        val intent = Intent(this, MainActivity::class.java)
+        val intent = Intent(this, MainActivity::class.java).apply {
+            putExtra("command", "LOCK")
+        }
         val pendingIntent = PendingIntent.getActivity(
             this,
-            0,
+            1,
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )

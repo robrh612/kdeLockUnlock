@@ -1,6 +1,8 @@
 package com.example.kdelockunlock.tile
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import androidx.wear.protolayout.ActionBuilders
 import androidx.wear.protolayout.DimensionBuilders
 import androidx.wear.protolayout.LayoutElementBuilders
@@ -44,15 +46,19 @@ private fun tile(
     requestParams: RequestBuilders.TileRequest,
     context: Context,
 ): TileBuilders.Tile {
-    val launchIntent = ActionBuilders.launchAction(
-        android.content.ComponentName(
-            context.packageName,
-            MainActivity::class.java.name
-        )
+    val lockIntent = Intent(context, MainActivity::class.java).apply {
+        putExtra("command", "LOCK")
+    }
+    val lockAction = ActionBuilders.launchAction(
+        ComponentName(context.packageName, MainActivity::class.java.name)
     )
 
-    val clickModifier = ModifiersBuilders.Clickable.Builder()
-        .setOnClick(launchIntent)
+    val lockClick = ModifiersBuilders.Clickable.Builder()
+        .setOnClick(lockAction)
+        .build()
+
+    val unlockClick = ModifiersBuilders.Clickable.Builder()
+        .setOnClick(lockAction)
         .build()
 
     return TileBuilders.Tile.Builder()
@@ -71,7 +77,7 @@ private fun tile(
                             LayoutElementBuilders.Column.Builder()
                                 .addContent(
                                     button(
-                                        onClick = clickModifier,
+                                        onClick = lockClick,
                                         labelContent = { text("🔒 Lock PC".layoutString) }
                                     )
                                 )
@@ -80,7 +86,7 @@ private fun tile(
                                 )
                                 .addContent(
                                     button(
-                                        onClick = clickModifier,
+                                        onClick = unlockClick,
                                         labelContent = { text("🔓 Unlock PC".layoutString) }
                                     )
                                 )
